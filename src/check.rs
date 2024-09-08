@@ -37,7 +37,7 @@ pub fn check_subcommand(project_path_argument: PathBuf) -> Result<()> {
 
             let project_path = project_path.as_ref().unwrap().path();
 
-            check_project(project_path)?;
+            error_count += check_project(project_path)?;
         }
 
         println!(
@@ -47,7 +47,6 @@ pub fn check_subcommand(project_path_argument: PathBuf) -> Result<()> {
     } else {
         let project_path = project_path_argument.as_path();
         check_project(project_path)?;
-        //println!("Project is not a directory: {:?}", project_argument);
     }
 
     Ok(())
@@ -62,9 +61,13 @@ fn is_project_file(entry: &Result<walkdir::DirEntry, walkdir::Error>) -> bool {
     entry.path().extension() == Some("vbp".as_ref())
 }
 
-fn check_project(project_path: &Path) -> Result<()> {
+// TODO: Eventually we should be returning an object that contains the errors and the project information.
+// This will allow us to display the errors in a more structured way.
+// For now we just print the errors to the console and return the error count.
+
+fn check_project(project_path: &Path) -> Result<u32> {
     let project_contents = std::fs::read(project_path).unwrap();
-    let mut _error_count = 0;
+    let mut error_count = 0;
 
     let project_file_name = std::path::Path::new(project_path)
         .file_name()
@@ -80,7 +83,7 @@ fn check_project(project_path: &Path) -> Result<()> {
             project_path.to_str().unwrap(),
             project.err().unwrap()
         );
-        return Ok(());
+        return Ok(error_count);
     }
 
     let project = project.unwrap();
@@ -97,7 +100,7 @@ fn check_project(project_path: &Path) -> Result<()> {
                 project_path.to_str().unwrap(),
                 class_path.to_str().unwrap()
             );
-            _error_count += 1;
+            error_count += 1;
             continue;
         }
 
@@ -112,7 +115,7 @@ fn check_project(project_path: &Path) -> Result<()> {
                 file_name,
                 class.err().unwrap()
             );
-            _error_count += 1;
+            error_count += 1;
             continue;
         }
 
@@ -128,7 +131,7 @@ fn check_project(project_path: &Path) -> Result<()> {
                 project_path.to_str().unwrap(),
                 module_path.to_str().unwrap()
             );
-            _error_count += 1;
+            error_count += 1;
             continue;
         }
 
@@ -143,7 +146,7 @@ fn check_project(project_path: &Path) -> Result<()> {
                 file_name,
                 module.err().unwrap()
             );
-            _error_count += 1;
+            error_count += 1;
             continue;
         }
 
@@ -159,7 +162,7 @@ fn check_project(project_path: &Path) -> Result<()> {
                 project_path.to_str().unwrap(),
                 form_path.to_str().unwrap()
             );
-            _error_count += 1;
+            error_count += 1;
             continue;
         }
 
@@ -174,12 +177,12 @@ fn check_project(project_path: &Path) -> Result<()> {
                 file_name,
                 form.err().unwrap()
             );
-            _error_count += 1;
+            error_count += 1;
             continue;
         }
 
         let _form = form.unwrap();
     }
 
-    Ok(())
+    Ok(error_count)
 }
