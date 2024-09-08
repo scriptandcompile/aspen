@@ -1,0 +1,13 @@
+[package]
+name = "aspen"
+version = "0.1.0"
+edition = "2021"
+description = """
+Aspen, a VB6 tool for parsing and analyzing VB6 code, in the spirit of cargo check, cargo fmt, etc.
+"""
+
+[dependencies]
+vb6parse = {path = "../vb6parse"}
+clap = {version = "4.5.17", features = ["cargo", "string"]}
+walkdir = "2.5.0"
+anyhow = "1.0.87"
