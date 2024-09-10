@@ -92,7 +92,9 @@ fn check_project(project_path: &Path) -> Result<u32> {
     let project_directory = std::path::Path::new(project_path).parent().unwrap();
 
     for class_reference in project.classes {
-        let class_path = project_directory.join(&class_reference.path.to_string());
+        let ref_path = class_reference.path.to_string().replace("\\", "/");
+        let partial_class_path = std::path::Path::new(&ref_path);
+        let class_path = project_directory.join(&partial_class_path);
 
         if std::fs::metadata(&class_path).is_err() {
             println!(
@@ -123,7 +125,9 @@ fn check_project(project_path: &Path) -> Result<u32> {
     }
 
     for module_reference in project.modules {
-        let module_path = project_directory.join(&module_reference.path.to_string());
+        let ref_path = module_reference.path.to_string().replace("\\", "/");
+        let partial_module_path = std::path::Path::new(&ref_path);
+        let module_path = project_directory.join(&partial_module_path);
 
         if std::fs::metadata(&module_path).is_err() {
             println!(
@@ -154,7 +158,9 @@ fn check_project(project_path: &Path) -> Result<u32> {
     }
 
     for form_reference in project.forms {
-        let form_path = project_directory.join(&form_reference.to_string());
+        let ref_path = form_reference.to_string().replace("\\", "/");
+        let partial_form_path = std::path::Path::new(&ref_path);
+        let form_path = project_directory.join(&partial_form_path);
 
         if std::fs::metadata(&form_path).is_err() {
             println!(
