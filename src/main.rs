@@ -13,8 +13,6 @@ fn main() -> Result<()> {
         .subcommand(
             Command::new("check").about("Check the project").arg(
                 Arg::new("project")
-                    .short('p')
-                    .long("project")
                     .required(false)
                     .value_parser(value_parser!(PathBuf)),
             ),
