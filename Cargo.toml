@@ -10,4 +10,4 @@ Aspen, a VB6 tool for parsing and analyzing VB6 code, in the spirit of cargo che
 vb6parse = {path = "../vb6parse"}
 clap = {version = "4.5.17", features = ["cargo", "string"]}
 walkdir = "2.5.0"
-anyhow = "1.0.87"
+anyhow = "1.0.88"
