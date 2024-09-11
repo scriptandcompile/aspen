@@ -123,6 +123,7 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
             check_settings.project_path.to_str().unwrap(),
             project.err().unwrap()
         );
+        error_count += 1;
         return Ok(error_count);
     }
 
@@ -151,11 +152,6 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
                 _ => unreachable!(),
             }
         }
-    } else {
-        println!(
-            "Skipping reference checks for '{}'",
-            check_settings.project_path.to_str().unwrap()
-        );
     }
 
     if check_settings.check_classes {
@@ -190,11 +186,6 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
 
             let _class = class.unwrap();
         }
-    } else {
-        println!(
-            "Skipping class checks for '{}'",
-            check_settings.project_path.to_str().unwrap()
-        );
     }
 
     if check_settings.check_modules {
@@ -229,11 +220,6 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
 
             let _module = module.unwrap();
         }
-    } else {
-        println!(
-            "Skipping module checks for '{}'",
-            check_settings.project_path.to_str().unwrap()
-        );
     }
 
     if check_settings.check_forms {
@@ -268,11 +254,6 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
 
             let _form = form.unwrap();
         }
-    } else {
-        println!(
-            "Skipping form checks for '{}'",
-            check_settings.project_path.to_str().unwrap()
-        );
     }
 
     Ok(error_count)
