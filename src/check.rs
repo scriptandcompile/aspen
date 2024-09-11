@@ -13,6 +13,8 @@ pub fn check_subcommand(project_path_argument: PathBuf) -> Result<()> {
         return Ok(());
     }
 
+    let mut error_count = 0;
+    let mut project_count = 1;
     if project_path_argument.is_dir() {
         let search_path = project_path_argument.to_str().unwrap();
         let walker = WalkDir::new(search_path).into_iter();
@@ -23,15 +25,12 @@ pub fn check_subcommand(project_path_argument: PathBuf) -> Result<()> {
             .into_iter()
             .filter(|entry| is_project_file(entry))
             .collect();
-        let mut error_count = 0;
-        let project_count = found_projects.len();
+
+        project_count = found_projects.len();
 
         for project_path in &found_projects {
             if project_path.is_err() {
-                println!(
-                    "Failed to load project: {}",
-                    project_path.as_ref().err().unwrap()
-                );
+                println!("Failed to load {}:", project_path.as_ref().err().unwrap());
                 error_count += 1;
                 continue;
             }
@@ -40,14 +39,26 @@ pub fn check_subcommand(project_path_argument: PathBuf) -> Result<()> {
 
             error_count += check_project(project_path)?;
         }
-
-        println!(
-            "{} Projects checked with {} errors",
-            project_count, error_count
-        );
     } else {
         let project_path = project_path_argument.as_path();
-        check_project(project_path)?;
+        error_count += check_project(project_path)?;
+    }
+
+    if project_count == 1 {
+        if error_count == 0 {
+            println!("No errors found in project.");
+        } else {
+            println!("{} errors found in project.", error_count);
+        }
+    } else {
+        if error_count == 0 {
+            println!("No errors found in {} projects.", error_count);
+        } else {
+            println!(
+                "{} errors found in {} projects.",
+                error_count, project_count
+            );
+        }
     }
 
     Ok(())
