@@ -2,6 +2,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Result;
+use vb6parse::parsers::VB6ProjectReference;
 use walkdir::WalkDir;
 
 use vb6parse::parsers::{VB6ClassFile, VB6FormFile, VB6ModuleFile, VB6Project};
@@ -61,6 +62,16 @@ fn is_project_file(entry: &Result<walkdir::DirEntry, walkdir::Error>) -> bool {
     entry.path().extension() == Some("vbp".as_ref())
 }
 
+fn join_parent_project_path(parent_project_path: &Path, file_path: &str) -> PathBuf {
+    let path = PathBuf::from(parent_project_path);
+
+    if cfg!(target_os = "windows") {
+        path.join(file_path)
+    } else {
+        path.join(file_path.replace("\\", "/"))
+    }
+}
+
 // TODO: Eventually we should be returning an object that contains the errors and the project information.
 // This will allow us to display the errors in a more structured way.
 // For now we just print the errors to the console and return the error count.
@@ -91,10 +102,26 @@ fn check_project(project_path: &Path) -> Result<u32> {
     //remove filename from path
     let project_directory = std::path::Path::new(project_path).parent().unwrap();
 
+    for reference in project.get_project_references() {
+        match reference {
+            VB6ProjectReference::Project { path } => {
+                let reference_path = join_parent_project_path(project_directory, &path.to_string());
+                if std::fs::metadata(&reference_path).is_err() {
+                    println!(
+                        "{} | Sub-Project Reference not found: {}",
+                        project_path.to_str().unwrap(),
+                        reference_path.to_str().unwrap()
+                    );
+                    error_count += 1;
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
     for class_reference in project.classes {
-        let ref_path = class_reference.path.to_string().replace("\\", "/");
-        let partial_class_path = std::path::Path::new(&ref_path);
-        let class_path = project_directory.join(&partial_class_path);
+        let class_path =
+            join_parent_project_path(project_directory, &class_reference.path.to_string());
 
         if std::fs::metadata(&class_path).is_err() {
             println!(
@@ -125,9 +152,8 @@ fn check_project(project_path: &Path) -> Result<u32> {
     }
 
     for module_reference in project.modules {
-        let ref_path = module_reference.path.to_string().replace("\\", "/");
-        let partial_module_path = std::path::Path::new(&ref_path);
-        let module_path = project_directory.join(&partial_module_path);
+        let module_path =
+            join_parent_project_path(project_directory, &module_reference.path.to_string());
 
         if std::fs::metadata(&module_path).is_err() {
             println!(
@@ -158,9 +184,7 @@ fn check_project(project_path: &Path) -> Result<u32> {
     }
 
     for form_reference in project.forms {
-        let ref_path = form_reference.to_string().replace("\\", "/");
-        let partial_form_path = std::path::Path::new(&ref_path);
-        let form_path = project_directory.join(&partial_form_path);
+        let form_path = join_parent_project_path(project_directory, &form_reference.to_string());
 
         if std::fs::metadata(&form_path).is_err() {
             println!(
