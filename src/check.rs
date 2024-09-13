@@ -149,7 +149,8 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
                         error_count += 1;
                     }
                 }
-                _ => unreachable!(),
+                // this should be unreachable, but if it is reached, we just skip it.
+                _ => continue,
             }
         }
     }
