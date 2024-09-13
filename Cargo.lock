@@ -95,8 +95,7 @@ dependencies = [
 [[package]]
 name = "ariadne"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44055e597c674aef7cb903b2b9f6e4cba1277ed0d2d61dae7cd52d7ffa81f8e2"
+source = "git+https://github.com/zesterer/ariadne.git?rev=41b562a3b500a76bb7a3caa76af6f4994f7a2c08#41b562a3b500a76bb7a3caa76af6f4994f7a2c08"
 dependencies = [
  "unicode-width",
  "yansi",
