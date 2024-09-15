@@ -135,9 +135,9 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
         .unwrap();
 
     if check_settings.check_references {
-        for reference in project.get_project_references() {
+        for reference in project.get_subproject_references() {
             match reference {
-                VB6ProjectReference::Project { path } => {
+                VB6ProjectReference::SubProject { path } => {
                     let reference_path =
                         join_parent_project_path(project_directory, &path.to_string());
                     if std::fs::metadata(&reference_path).is_err() {
