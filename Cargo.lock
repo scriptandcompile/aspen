@@ -71,9 +71,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.88"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e1496f8fb1fbf272686b8d37f523dab3e4a7443300055e74cdaa449f3114356"
+checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
 
 [[package]]
 name = "arbitrary"
@@ -95,7 +95,8 @@ dependencies = [
 [[package]]
 name = "ariadne"
 version = "0.4.1"
-source = "git+https://github.com/zesterer/ariadne.git?rev=41b562a3b500a76bb7a3caa76af6f4994f7a2c08#41b562a3b500a76bb7a3caa76af6f4994f7a2c08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44055e597c674aef7cb903b2b9f6e4cba1277ed0d2d61dae7cd52d7ffa81f8e2"
 dependencies = [
  "unicode-width",
  "yansi",
@@ -1114,7 +1115,9 @@ dependencies = [
 
 [[package]]
 name = "vb6parse"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7541ba2a9739958bbd90ad6dc7551b10992826eb112393323372f821df2f02de"
 dependencies = [
  "ariadne",
  "bstr",
