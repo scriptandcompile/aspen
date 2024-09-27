@@ -25,6 +25,7 @@ pub fn check_subcommand(check_settings: CheckSettings) -> Result<()> {
     }
 
     let mut error_count = 0;
+    let mut non_english_file_count = 0;
     let mut project_count = 1;
 
     if check_settings.project_path.is_dir() {
@@ -55,30 +56,75 @@ pub fn check_subcommand(check_settings: CheckSettings) -> Result<()> {
                 check_references: check_settings.check_references,
             };
 
-            error_count += check_project(&check_settings)?;
+            let (errors, non_english) = check_project(&check_settings)?;
+            error_count += errors;
+            non_english_file_count += non_english;
         }
     } else {
-        error_count += check_project(&check_settings)?;
+        let (errors, non_english) = check_project(&check_settings)?;
+        error_count += errors;
+        non_english_file_count += non_english;
     }
 
-    if project_count == 1 {
-        if error_count == 0 {
-            println!("No errors found in project.");
-        } else {
-            println!("{} errors found in project.", error_count);
-        }
-    } else {
-        if error_count == 0 {
-            println!("No errors found in {} projects.", error_count);
-        } else {
-            println!(
-                "{} errors found in {} projects.",
-                error_count, project_count
-            );
-        }
-    }
+    report_check_summary(project_count, error_count, non_english_file_count);
 
     Ok(())
+}
+
+fn report_check_summary(project_count: usize, error_count: u32, non_english_file_count: u32) {
+    if project_count == 1 {
+        if error_count == 0 && non_english_file_count == 0 {
+            println!("No errors found in the project.");
+            return;
+        }
+
+        if error_count == 0 && non_english_file_count != 0 {
+            println!(
+                "{} unprocessed non-English files found in the project.",
+                non_english_file_count
+            );
+            return;
+        }
+
+        if error_count != 0 && non_english_file_count == 0 {
+            println!("{} errors found in the project.", error_count);
+            return;
+        }
+
+        if error_count != 0 && non_english_file_count == 0 {
+            println!("{} errors found in project with {} unprocessed non-English files found in the project", error_count, non_english_file_count);
+            return;
+        }
+    }
+
+    if error_count == 0 && non_english_file_count == 0 {
+        println!("No errors found in {} projects.", project_count);
+        return;
+    }
+
+    if error_count == 0 && non_english_file_count != 0 {
+        println!(
+            "{} unprocessed non-English files found in {} projects",
+            non_english_file_count, project_count
+        );
+        return;
+    }
+
+    if error_count != 0 && non_english_file_count == 0 {
+        println!(
+            "{} errors found in {} projects.",
+            error_count, project_count
+        );
+        return;
+    }
+
+    if error_count != 0 && non_english_file_count != 0 {
+        println!(
+            "{} errors, {} unprocessed non-English files found in {} projects.",
+            error_count, non_english_file_count, project_count
+        );
+        return;
+    }
 }
 
 fn is_project_file(entry: &Result<walkdir::DirEntry, walkdir::Error>) -> bool {
@@ -104,9 +150,10 @@ fn join_parent_project_path(parent_project_path: &Path, file_path: &str) -> Path
 // This will allow us to display the errors in a more structured way.
 // For now we just print the errors to the console and return the error count.
 
-fn check_project(check_settings: &CheckSettings) -> Result<u32> {
+fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
     let project_contents = std::fs::read(&check_settings.project_path).unwrap();
     let mut error_count = 0;
+    let mut non_english_file_count = 0;
 
     let file_name = check_settings
         .project_path
@@ -124,7 +171,7 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
             project.err().unwrap()
         );
         error_count += 1;
-        return Ok(error_count);
+        return Ok((error_count, non_english_file_count));
     }
 
     let project = project.unwrap();
@@ -175,14 +222,25 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
             let class = VB6ClassFile::parse(file_name.to_owned(), &mut class_contents.as_slice());
 
             if class.is_err() {
-                println!(
-                    "{} | Failed to load class '{}' | load error: {}",
+                let class = class.unwrap_err();
+                if class.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
+                    println!(
+                    "{} | Failed to load class '{}' | Class is likely not in an English character set.",
                     check_settings.project_path.to_str().unwrap(),
-                    file_name,
-                    class.err().unwrap()
-                );
-                error_count += 1;
-                continue;
+                    file_name);
+                    non_english_file_count += 1;
+                    continue;
+                }
+                {
+                    println!(
+                        "{} | Failed to load class '{}' | load error: {}",
+                        check_settings.project_path.to_str().unwrap(),
+                        file_name,
+                        class
+                    );
+                    error_count += 1;
+                    continue;
+                }
             }
 
             let _class = class.unwrap();
@@ -209,14 +267,24 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
             let module = VB6ModuleFile::parse(file_name.to_owned(), &module_contents);
 
             if module.is_err() {
-                println!(
-                    "{} | Failed to load module '{}' load error: {}",
+                let module = module.unwrap_err();
+                if module.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
+                    println!(
+                    "{} | Failed to load module '{}' | Module is likely not in an English character set.",
                     check_settings.project_path.to_str().unwrap(),
-                    file_name,
-                    module.err().unwrap()
-                );
-                error_count += 1;
-                continue;
+                    file_name);
+                    non_english_file_count += 1;
+                    continue;
+                } else {
+                    println!(
+                        "{} | Failed to load module '{}' load error: {}",
+                        check_settings.project_path.to_str().unwrap(),
+                        file_name,
+                        module
+                    );
+                    error_count += 1;
+                    continue;
+                }
             }
 
             let _module = module.unwrap();
@@ -243,19 +311,29 @@ fn check_project(check_settings: &CheckSettings) -> Result<u32> {
             let form = VB6FormFile::parse(file_name.to_owned(), &mut form_contents.as_slice());
 
             if form.is_err() {
-                println!(
-                    "{} | Failed to load form '{}' load error: {}",
+                let form = form.unwrap_err();
+                if form.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
+                    println!(
+                    "{} | Failed to load form '{}' | Form is likely not in an English character set.",
                     check_settings.project_path.to_str().unwrap(),
-                    file_name,
-                    form.err().unwrap()
-                );
-                error_count += 1;
-                continue;
+                    file_name);
+                    non_english_file_count += 1;
+                    continue;
+                } else {
+                    println!(
+                        "{} | Failed to load form '{}' load error: {}",
+                        check_settings.project_path.to_str().unwrap(),
+                        file_name,
+                        form
+                    );
+                    error_count += 1;
+                    continue;
+                }
             }
 
             let _form = form.unwrap();
         }
     }
 
-    Ok(error_count)
+    Ok((error_count, non_english_file_count))
 }
