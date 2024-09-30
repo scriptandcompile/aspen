@@ -110,7 +110,7 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "aspen"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1119,9 +1119,9 @@ dependencies = [
 
 [[package]]
 name = "vb6parse"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e321c214f9cda73b6f81f8f0b59e9f9a5c8d093faabc0881f82f5a34d2a2f75"
+checksum = "8ab41358b5872688ea9b35b7a57a668990ba09b9081793ed96cd5dd6b92642dd"
 dependencies = [
  "ariadne",
  "bstr",
