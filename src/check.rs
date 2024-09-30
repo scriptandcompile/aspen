@@ -1,8 +1,10 @@
-use std::path::Path;
-use std::path::PathBuf;
+use anyhow::Error;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use rayon::prelude::*;
 use vb6parse::parsers::VB6ProjectReference;
+
 use walkdir::WalkDir;
 
 use vb6parse::parsers::{VB6ClassFile, VB6FormFile, VB6ModuleFile, VB6Project};
@@ -15,6 +17,13 @@ pub struct CheckSettings {
     pub check_references: bool,
 }
 
+pub struct CheckResults {
+    pub project_path: String,
+    pub parsing_errors: Vec<Error>,
+    pub non_english_files: Vec<String>,
+    pub missing_files: Vec<String>,
+}
+
 pub fn check_subcommand(check_settings: CheckSettings) -> Result<()> {
     if !check_settings.project_path.exists() {
         println!(
@@ -24,9 +33,7 @@ pub fn check_subcommand(check_settings: CheckSettings) -> Result<()> {
         return Ok(());
     }
 
-    let mut error_count = 0;
-    let mut non_english_file_count = 0;
-    let mut project_count = 1;
+    let mut check_summary = Vec::new();
 
     if check_settings.project_path.is_dir() {
         let search_path = check_settings.project_path.to_str().unwrap();
@@ -39,89 +46,292 @@ pub fn check_subcommand(check_settings: CheckSettings) -> Result<()> {
             .filter(|entry| is_project_file(entry))
             .collect();
 
-        project_count = found_projects.len();
+        found_projects
+            .par_iter()
+            .map(|project_path| {
+                if project_path.is_err() {
+                    let check_result = CheckResults {
+                        project_path: project_path
+                            .as_ref()
+                            .unwrap()
+                            .path()
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                        parsing_errors: Vec::new(),
+                        non_english_files: Vec::new(),
+                        missing_files: vec![format!(
+                            "Failed to load {}",
+                            project_path.as_ref().err().unwrap()
+                        )],
+                    };
 
-        for project_path in &found_projects {
-            if project_path.is_err() {
-                println!("Failed to load {}:", project_path.as_ref().err().unwrap());
-                error_count += 1;
-                continue;
-            }
+                    return check_result;
+                }
 
-            let check_settings = CheckSettings {
-                project_path: project_path.as_ref().unwrap().path().to_path_buf(),
-                check_forms: check_settings.check_forms,
-                check_modules: check_settings.check_modules,
-                check_classes: check_settings.check_classes,
-                check_references: check_settings.check_references,
-            };
+                let check_settings = CheckSettings {
+                    project_path: project_path.as_ref().unwrap().path().to_path_buf(),
+                    check_forms: check_settings.check_forms,
+                    check_modules: check_settings.check_modules,
+                    check_classes: check_settings.check_classes,
+                    check_references: check_settings.check_references,
+                };
 
-            let (errors, non_english) = check_project(&check_settings)?;
-            error_count += errors;
-            non_english_file_count += non_english;
-        }
+                let check_result = match check_project(&check_settings) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        let check_result = CheckResults {
+                            project_path: check_settings.project_path.to_str().unwrap().to_string(),
+                            parsing_errors: vec![e],
+                            non_english_files: Vec::new(),
+                            missing_files: Vec::new(),
+                        };
+
+                        return check_result;
+                    }
+                };
+                return check_result;
+            })
+            .collect_into_vec(&mut check_summary);
     } else {
-        let (errors, non_english) = check_project(&check_settings)?;
-        error_count += errors;
-        non_english_file_count += non_english;
+        let check_result = match check_project(&check_settings) {
+            Ok(result) => result,
+            Err(e) => {
+                let check_result = CheckResults {
+                    project_path: check_settings.project_path.to_str().unwrap().to_string(),
+                    parsing_errors: vec![e],
+                    non_english_files: Vec::new(),
+                    missing_files: Vec::new(),
+                };
+
+                check_result
+            }
+        };
+        check_summary.push(check_result);
     }
 
-    report_check_summary(project_count, error_count, non_english_file_count);
+    for check_result in &check_summary {
+        report_check(check_result);
+    }
+
+    report_check_summary(check_summary);
 
     Ok(())
 }
 
-fn report_check_summary(project_count: usize, error_count: u32, non_english_file_count: u32) {
-    if project_count == 1 {
-        if error_count == 0 && non_english_file_count == 0 {
-            println!("No errors found in the project.");
-            return;
-        }
-
-        if error_count == 0 && non_english_file_count != 0 {
-            println!(
-                "{} unprocessed non-English files found in the project.",
-                non_english_file_count
-            );
-            return;
-        }
-
-        if error_count != 0 && non_english_file_count == 0 {
-            println!("{} errors found in the project.", error_count);
-            return;
-        }
-
-        if error_count != 0 && non_english_file_count == 0 {
-            println!("{} errors found in project with {} unprocessed non-English files found in the project", error_count, non_english_file_count);
-            return;
-        }
+fn report_check(check_results: &CheckResults) {
+    if check_results.parsing_errors.len() == 0
+        && check_results.non_english_files.len() == 0
+        && check_results.missing_files.len() == 0
+    {
+        return;
     }
 
-    if error_count == 0 && non_english_file_count == 0 {
+    println!("Errors found in '{}':", check_results.project_path);
+    if check_results.missing_files.len() != 0 {
+        println!("Missing Files:");
+        for missing_file in &check_results.missing_files {
+            println!("  {}", missing_file);
+        }
+    }
+    if check_results.parsing_errors.len() != 0 {
+        println!("Parsing Errors:");
+        for error in &check_results.parsing_errors {
+            println!("  {}", error);
+        }
+    }
+    if check_results.non_english_files.len() != 0 {
+        println!("Non-English Files:");
+        for non_english_file in &check_results.non_english_files {
+            println!("  {}", non_english_file);
+        }
+    }
+}
+
+fn report_single_check_summary(summary: &CheckResults) {
+    // 0, 0, 0
+    if summary.parsing_errors.len() == 0
+        && summary.non_english_files.len() == 0
+        && summary.missing_files.len() == 0
+    {
+        println!("No errors found in {}.", summary.project_path);
+        return;
+    }
+
+    // 0, 0, 1
+    if summary.parsing_errors.len() == 0
+        && summary.non_english_files.len() == 0
+        && summary.missing_files.len() != 0
+    {
+        println!(
+            "{} missing files in {}.",
+            summary.missing_files.len(),
+            summary.project_path
+        );
+        return;
+    }
+
+    // 0, 1, 0
+    if summary.parsing_errors.len() == 0
+        && summary.non_english_files.len() != 0
+        && summary.missing_files.len() == 0
+    {
+        println!(
+            "{} unprocessed non-English files found in the project.",
+            summary.non_english_files.len()
+        );
+        return;
+    }
+
+    // 0, 1, 1
+    if summary.parsing_errors.len() == 0
+        && summary.non_english_files.len() != 0
+        && summary.missing_files.len() != 0
+    {
+        println!(
+            "{} missing files, {} unprocessed non-English files found in the project.",
+            summary.missing_files.len(),
+            summary.non_english_files.len()
+        );
+        return;
+    }
+
+    // 1, 0, 0
+    if summary.parsing_errors.len() != 0
+        && summary.non_english_files.len() == 0
+        && summary.missing_files.len() == 0
+    {
+        println!(
+            "{} errors found in the project.",
+            summary.parsing_errors.len()
+        );
+        return;
+    }
+
+    // 1, 0, 1
+    if summary.parsing_errors.len() != 0
+        && summary.non_english_files.len() == 0
+        && summary.missing_files.len() != 0
+    {
+        println!(
+            "{} missing files, {} errors found in the project.",
+            summary.missing_files.len(),
+            summary.parsing_errors.len()
+        );
+        return;
+    }
+
+    // 1, 1, 0
+    if summary.parsing_errors.len() != 0
+        && summary.non_english_files.len() != 0
+        && summary.missing_files.len() == 0
+    {
+        println!(
+            "{} errors found in project with {} unprocessed non-English files found in the project.",
+            summary.parsing_errors.len(),
+            summary.non_english_files.len()
+        );
+        return;
+    }
+
+    // 1, 1, 1
+    if summary.parsing_errors.len() != 0
+        && summary.non_english_files.len() != 0
+        && summary.missing_files.len() != 0
+    {
+        println!(
+            "{} missing files, {} errors found in project with {} unprocessed non-English files found in the project.",
+            summary.missing_files.len(),
+            summary.parsing_errors.len(),
+            summary.non_english_files.len()
+        );
+        return;
+    }
+}
+
+fn report_check_summary(summary: Vec<CheckResults>) {
+    if summary.len() == 1 {
+        report_single_check_summary(&summary[0]);
+        return;
+    }
+
+    let project_count = summary.len();
+
+    let total_error_count = summary
+        .iter()
+        .fold(0, |acc, x| acc + x.parsing_errors.len());
+
+    let total_missed_file_count = summary.iter().fold(0, |acc, x| acc + x.missing_files.len());
+
+    let total_non_english_file_count = summary
+        .iter()
+        .fold(0, |acc, x| acc + x.non_english_files.len());
+
+    // 0, 0, 0
+    if total_error_count == 0 && total_non_english_file_count == 0 && total_missed_file_count == 0 {
         println!("No errors found in {} projects.", project_count);
         return;
     }
 
-    if error_count == 0 && non_english_file_count != 0 {
+    // 0, 0, 1
+    if total_error_count == 0 && total_non_english_file_count == 0 && total_missed_file_count != 0 {
+        println!(
+            "{} missing files in {} projects",
+            total_non_english_file_count, project_count
+        );
+        return;
+    }
+
+    // 0, 1, 0
+    if total_error_count == 0 && total_non_english_file_count != 0 && total_missed_file_count == 0 {
         println!(
             "{} unprocessed non-English files found in {} projects",
-            non_english_file_count, project_count
+            total_non_english_file_count, project_count
         );
         return;
     }
 
-    if error_count != 0 && non_english_file_count == 0 {
+    // 0, 1, 1
+    if total_error_count == 0 && total_non_english_file_count != 0 && total_missed_file_count != 0 {
+        println!(
+            "{} missing files, {} unprocessed non-English files found in {} projects",
+            total_missed_file_count, total_non_english_file_count, project_count
+        );
+        return;
+    }
+
+    // 1, 0, 0
+    if total_error_count != 0 && total_non_english_file_count == 0 && total_missed_file_count == 0 {
         println!(
             "{} errors found in {} projects.",
-            error_count, project_count
+            total_error_count, project_count
         );
         return;
     }
 
-    if error_count != 0 && non_english_file_count != 0 {
+    // 1, 0, 1
+    if total_error_count != 0 && total_non_english_file_count == 0 && total_missed_file_count != 0 {
+        println!(
+            "{} missing files, {} errors found in {} projects.",
+            total_missed_file_count, total_error_count, project_count
+        );
+        return;
+    }
+
+    // 1, 1, 0
+    if total_error_count != 0 && total_non_english_file_count != 0 && total_missed_file_count == 0 {
         println!(
             "{} errors, {} unprocessed non-English files found in {} projects.",
-            error_count, non_english_file_count, project_count
+            total_error_count, total_non_english_file_count, project_count
+        );
+        return;
+    }
+
+    // 1, 1, 1
+    if total_error_count != 0 && total_non_english_file_count != 0 && total_missed_file_count != 0 {
+        println!(
+            "{} missing files, {} errors, {} unprocessed non-English files found in {} projects.",
+            total_missed_file_count, total_error_count, total_non_english_file_count, project_count
         );
         return;
     }
@@ -149,11 +359,15 @@ fn join_parent_project_path(parent_project_path: &Path, file_path: &str) -> Path
 // TODO: Eventually we should be returning an object that contains the errors and the project information.
 // This will allow us to display the errors in a more structured way.
 // For now we just print the errors to the console and return the error count.
+fn check_project(check_settings: &CheckSettings) -> Result<CheckResults> {
+    let mut check_results = CheckResults {
+        project_path: check_settings.project_path.to_str().unwrap().to_string(),
+        parsing_errors: Vec::new(),
+        non_english_files: Vec::new(),
+        missing_files: Vec::new(),
+    };
 
-fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
     let project_contents = std::fs::read(&check_settings.project_path).unwrap();
-    let mut error_count = 0;
-    let mut non_english_file_count = 0;
 
     let file_name = check_settings
         .project_path
@@ -165,13 +379,13 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
     let project = VB6Project::parse(file_name, project_contents.as_slice());
 
     if project.is_err() {
-        println!(
-            "Failed to load project '{}'\r\n{}",
-            check_settings.project_path.to_str().unwrap(),
-            project.err().unwrap()
+        check_results.parsing_errors.push(
+            project
+                .expect_err("Project parse error occurred but no error was returned")
+                .into(),
         );
-        error_count += 1;
-        return Ok((error_count, non_english_file_count));
+
+        return Ok(check_results);
     }
 
     let project = project.unwrap();
@@ -188,12 +402,10 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
                     let reference_path =
                         join_parent_project_path(project_directory, &path.to_string());
                     if std::fs::metadata(&reference_path).is_err() {
-                        println!(
-                            "{} | Sub-Project Reference not found: {}",
-                            check_settings.project_path.to_str().unwrap(),
+                        check_results.missing_files.push(format!(
+                            "Sub-Project Reference not found: {}",
                             reference_path.to_str().unwrap()
-                        );
-                        error_count += 1;
+                        ));
                     }
                 }
                 // this should be unreachable, but if it is reached, we just skip it.
@@ -208,12 +420,10 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
                 join_parent_project_path(project_directory, &class_reference.path.to_string());
 
             if std::fs::metadata(&class_path).is_err() {
-                println!(
-                    "{} | Class not found: {}",
-                    check_settings.project_path.to_str().unwrap(),
-                    class_path.to_str().unwrap()
-                );
-                error_count += 1;
+                check_results
+                    .missing_files
+                    .push(format!("Class not found: {}", class_path.to_str().unwrap()));
+
                 continue;
             }
 
@@ -222,23 +432,18 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
             let class = VB6ClassFile::parse(file_name.to_owned(), &mut class_contents.as_slice());
 
             if class.is_err() {
-                let class = class.unwrap_err();
-                if class.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
-                    println!(
-                    "{} | Failed to load class '{}' | Class is likely not in an English character set.",
-                    check_settings.project_path.to_str().unwrap(),
-                    file_name);
-                    non_english_file_count += 1;
+                let err = class.unwrap_err();
+                if err.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
+                    check_results.non_english_files.push(format!(
+                        "Class is likely not in an English character set: {}",
+                        file_name
+                    ));
+
                     continue;
                 }
                 {
-                    println!(
-                        "{} | Failed to load class '{}' | load error: {}",
-                        check_settings.project_path.to_str().unwrap(),
-                        file_name,
-                        class
-                    );
-                    error_count += 1;
+                    check_results.parsing_errors.push(err.into());
+
                     continue;
                 }
             }
@@ -253,12 +458,11 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
                 join_parent_project_path(project_directory, &module_reference.path.to_string());
 
             if std::fs::metadata(&module_path).is_err() {
-                println!(
-                    "{} | Module not found: {}",
-                    check_settings.project_path.to_str().unwrap(),
+                check_results.missing_files.push(format!(
+                    "Module not found: {}",
                     module_path.to_str().unwrap()
-                );
-                error_count += 1;
+                ));
+
                 continue;
             }
 
@@ -267,22 +471,17 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
             let module = VB6ModuleFile::parse(file_name.to_owned(), &module_contents);
 
             if module.is_err() {
-                let module = module.unwrap_err();
-                if module.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
-                    println!(
-                    "{} | Failed to load module '{}' | Module is likely not in an English character set.",
-                    check_settings.project_path.to_str().unwrap(),
-                    file_name);
-                    non_english_file_count += 1;
+                let err = module.unwrap_err();
+                if err.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
+                    check_results.non_english_files.push(format!(
+                        "Module is likely not in an English character set: {}",
+                        file_name
+                    ));
+
                     continue;
                 } else {
-                    println!(
-                        "{} | Failed to load module '{}' load error: {}",
-                        check_settings.project_path.to_str().unwrap(),
-                        file_name,
-                        module
-                    );
-                    error_count += 1;
+                    check_results.parsing_errors.push(err.into());
+
                     continue;
                 }
             }
@@ -297,12 +496,10 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
                 join_parent_project_path(project_directory, &form_reference.to_string());
 
             if std::fs::metadata(&form_path).is_err() {
-                println!(
-                    "{} | Form not found: {}",
-                    check_settings.project_path.to_str().unwrap(),
-                    form_path.to_str().unwrap()
-                );
-                error_count += 1;
+                check_results
+                    .missing_files
+                    .push(format!("Form not found: {}", form_path.to_str().unwrap()));
+
                 continue;
             }
 
@@ -311,22 +508,16 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
             let form = VB6FormFile::parse(file_name.to_owned(), &mut form_contents.as_slice());
 
             if form.is_err() {
-                let form = form.unwrap_err();
-                if form.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
-                    println!(
-                    "{} | Failed to load form '{}' | Form is likely not in an English character set.",
-                    check_settings.project_path.to_str().unwrap(),
-                    file_name);
-                    non_english_file_count += 1;
+                let err = form.unwrap_err();
+                if err.kind == vb6parse::errors::VB6ErrorKind::LikelyNonEnglishCharacterSet {
+                    check_results.non_english_files.push(format!(
+                        "Form is likely not in an English character set: {}",
+                        file_name
+                    ));
+
                     continue;
                 } else {
-                    println!(
-                        "{} | Failed to load form '{}' load error: {}",
-                        check_settings.project_path.to_str().unwrap(),
-                        file_name,
-                        form
-                    );
-                    error_count += 1;
+                    check_results.parsing_errors.push(err.into());
                     continue;
                 }
             }
@@ -335,5 +526,5 @@ fn check_project(check_settings: &CheckSettings) -> Result<(u32, u32)> {
         }
     }
 
-    Ok((error_count, non_english_file_count))
+    Ok(check_results)
 }

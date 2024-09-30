@@ -12,7 +12,8 @@ keywords = ["vb6", "parser", "analyzer", "vb6parse"]
 categories = ["development-tools", "parsing", "parser-implementations"]
 
 [dependencies]
-vb6parse = "0.3.0"
+vb6parse = {path = "../vb6parse"}
 clap = {version = "4.5.18", features = ["cargo", "string"]}
 walkdir = "2.5.0"
 anyhow = "1.0.89"
+rayon = "1.10.0"
