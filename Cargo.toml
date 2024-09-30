@@ -1,6 +1,6 @@
 [package]
 name = "aspen"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license-file = "LICENSE"
 description = """
@@ -12,7 +12,7 @@ keywords = ["vb6", "parser", "analyzer", "vb6parse"]
 categories = ["development-tools", "parsing", "parser-implementations"]
 
 [dependencies]
-vb6parse = {path = "../vb6parse"}
+vb6parse = "0.4.0"
 clap = {version = "4.5.18", features = ["cargo", "string"]}
 walkdir = "2.5.0"
 anyhow = "1.0.89"

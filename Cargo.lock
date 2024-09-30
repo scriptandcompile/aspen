@@ -110,10 +110,11 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "aspen"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
+ "rayon",
  "vb6parse",
  "walkdir",
 ]
@@ -317,6 +318,9 @@ name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "equivalent"
@@ -1115,12 +1119,13 @@ dependencies = [
 
 [[package]]
 name = "vb6parse"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48e1dffeb7833fa349537ae047b3954fefaaae5e19eee5d57810c0a7fd636099"
+checksum = "7e321c214f9cda73b6f81f8f0b59e9f9a5c8d093faabc0881f82f5a34d2a2f75"
 dependencies = [
  "ariadne",
  "bstr",
+ "either",
  "image",
  "num_enum",
  "serde",
@@ -1296,9 +1301,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.6.19"
+version = "0.6.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c52ac009d615e79296318c1bcce2d422aaca15ad08515e344feeda07df67a587"
+checksum = "36c1fec1a2bb5866f07c25f68c26e565c4c200aebb96d7e55710c19d3e8ac49b"
 dependencies = [
  "memchr",
 ]
